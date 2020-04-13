@@ -29,9 +29,6 @@ public typealias UnboundSignal<Success, Failure: Error> = Task<Success, Failure,
 
 public typealias UnboundTask<Success, Failure: Error, Progress> = Task<Success, Failure, Progress, Any>
 
-public func identity<A>(_ x: A) -> A { x }
-public func absurd<A>(_ never: Never) -> A {}
-
 extension Task where Environment == Any {
   public func ready(_ callback: @escaping (Step) -> Void) -> () -> Void {
     { self.run((), callback) }
@@ -271,3 +268,8 @@ public typealias CancelableUnboundSignal<Success, Failure: Error> = Task<Cancela
 
 public typealias CancelableTask<Success, Failure: Error, Progress, Environment> = Task<CancelableValue<Success>, Failure, CancelableOngoing<Progress>, Environment>
 public typealias CancelableUnboundTask<Success, Failure: Error, Progress> = Task<CancelableValue<Success>, Failure, CancelableOngoing<Progress>, Any>
+
+// MARK: - Private
+
+private func identity<A>(_ x: A) -> A { x }
+private func absurd<A>(_ never: Never) -> A {}
