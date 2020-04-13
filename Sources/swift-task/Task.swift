@@ -30,7 +30,7 @@ public typealias UnboundSignal<Success, Failure: Error> = Task<Success, Failure,
 public typealias UnboundTask<Success, Failure: Error, Progress> = Task<Success, Failure, Progress, Any>
 
 public func identity<A>(_ x: A) -> A { x }
-public func absurd(_ never: Never) -> Never {}
+public func absurd<A>(_ never: Never) -> A {}
 
 extension Task where Environment == Any {
   public func ready(_ callback: @escaping (Step) -> Void) -> () -> Void {
@@ -64,13 +64,13 @@ extension Task {
   }
 
   public func mapFailure<OtherFailure: Error>(
-    transform: @escaping (Failure) -> OtherFailure
+    _ transform: @escaping (Failure) -> OtherFailure
   ) -> Task<Success, OtherFailure, Progress, Environment> {
     map(success: identity, failure: transform, progress: identity)
   }
 
   public func mapProgress<OtherProgress>(
-    transform: @escaping (Progress) -> OtherProgress
+    _ transform: @escaping (Progress) -> OtherProgress
   ) -> Task<Success, Failure, OtherProgress, Environment> {
     map(success: identity, failure: identity, progress: transform)
   }
@@ -191,6 +191,24 @@ extension Task {
 
   public func or(_ other: @escaping @autoclosure () -> Self) -> Self {
     flatMapFailure { _ in other() }
+  }
+}
+
+extension Task where Failure == Never {
+  public func settingFailureType<Forced: Error>(to _: Forced.Type) -> Task<Success, Forced, Progress, Environment> {
+    mapFailure(absurd)
+  }
+}
+
+extension Task where Progress == Never {
+  public func settingProgressType<Forced>(to _: Forced.Type) -> Task<Success, Failure, Forced, Environment> {
+    mapProgress(absurd)
+  }
+}
+
+extension Task where Environment == Any {
+  public func settingEnvironmentType<Forced>(to _: Forced.Type) -> Task<Success, Failure, Progress, Forced> {
+    pullback(identity)
   }
 }
 
