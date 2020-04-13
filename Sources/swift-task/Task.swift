@@ -170,4 +170,52 @@ extension Task {
       }
     }
   }
+
+  public func flatMapSuccess<OtherSuccess>(
+    _ transform: @escaping (Success) -> Task<OtherSuccess, Failure, Canceling, Progress, Environment>
+  ) -> Task<OtherSuccess, Failure, Canceling, Progress, Environment> {
+    .init { environment, yield in
+      self.run(environment) { step in
+        switch step {
+        case let .cancelable(x):
+          yield(.cancelable(x))
+
+        case let .ongoing(x):
+          yield(.ongoing(x))
+
+        case let .completed(.failure(x)):
+          yield(.completed(.failure(x)))
+
+        case let .completed(.success(x)):
+          transform(x).run(environment, yield)
+        }
+      }
+    }
+  }
+
+  public func flatMapFailure<OtherFailure: Error>(
+    _ transform: @escaping (Failure) -> Task<Success, OtherFailure, Canceling, Progress, Environment>
+  ) -> Task<Success, OtherFailure, Canceling, Progress, Environment> {
+    .init { environment, yield in
+      self.run(environment) { step in
+        switch step {
+        case let .cancelable(x):
+          yield(.cancelable(x))
+
+        case let .ongoing(x):
+          yield(.ongoing(x))
+
+        case let .completed(.success(x)):
+          yield(.completed(.success(x)))
+
+        case let .completed(.failure(x)):
+          transform(x).run(environment, yield)
+        }
+      }
+    }
+  }
+
+  public func or(_ other: @escaping @autoclosure () -> Self) -> Self {
+    flatMapFailure { _ in other() }
+  }
 }
