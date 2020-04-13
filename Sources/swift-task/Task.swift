@@ -193,3 +193,63 @@ extension Task {
     flatMapFailure { _ in other() }
   }
 }
+
+public struct UniqueCancel: Equatable, Hashable {
+  public let id: AnyHashable
+  public let cancel: () -> Void
+
+  public init(
+    id: AnyHashable,
+    cancel: @escaping () -> Void
+  ) {
+    self.id = id
+    self.cancel = cancel
+  }
+
+  public func callAsFunction() {
+    cancel()
+  }
+
+  public static func == (lhs: Self, rhs: Self) -> Bool {
+    lhs.id == rhs.id
+  }
+
+  public func hash(into hasher: inout Hasher) {
+    hasher.combine(id)
+  }
+}
+
+public final class UniqueCancelBag {
+  private var cancels: Set<UniqueCancel> = []
+
+  public func add(_ cancel: UniqueCancel) {
+    if let previous = cancels.remove(cancel) {
+      previous.cancel()
+    }
+
+    cancels.insert(cancel)
+  }
+
+  deinit {
+    cancels.forEach { $0.cancel() }
+  }
+}
+
+public enum CancelableOngoing<Progress> {
+  case start(UniqueCancel)
+  case next(Progress)
+}
+
+public enum CancelableValue<Success> {
+  case canceled
+  case done(Success)
+}
+
+public typealias CancelableFuture<Success, Failure: Error, Progress, Environment> = Task<CancelableValue<Success>, Failure, CancelableOngoing<Progress>, Environment>
+public typealias CancelableUnboundFuture<Success, Failure: Error, Progress> = Task<CancelableValue<Success>, Failure, CancelableOngoing<Progress>, Any>
+
+public typealias CancelableSignal<Success, Failure: Error, Environment> = Task<CancelableValue<Success>, Failure, CancelableOngoing<Success>, Environment>
+public typealias CancelableUnboundSignal<Success, Failure: Error> = Task<CancelableValue<Success>, Failure, CancelableOngoing<Success>, Any>
+
+public typealias CancelableTask<Success, Failure: Error, Progress, Environment> = Task<CancelableValue<Success>, Failure, CancelableOngoing<Progress>, Environment>
+public typealias CancelableUnboundTask<Success, Failure: Error, Progress> = Task<CancelableValue<Success>, Failure, CancelableOngoing<Progress>, Any>
