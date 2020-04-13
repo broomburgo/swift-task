@@ -1,6 +1,5 @@
-public struct Task<Success, Failure: Error, Canceling, Progress, Environment> {
+public struct Task<Success, Failure: Error, Progress, Environment> {
   public enum Step {
-    case cancelable(Canceling)
     case ongoing(Progress)
     case completed(Result<Success, Failure>)
   }
@@ -19,16 +18,16 @@ public struct Task<Success, Failure: Error, Canceling, Progress, Environment> {
   }
 }
 
-public typealias Async<Success> = Task<Success, Never, Never, Never, Any>
-public typealias FailableAsync<Success, Failue: Error> = Task<Success, Failue, Never, Never, Any>
+public typealias Async<Success> = Task<Success, Never, Never, Any>
+public typealias FailableAsync<Success, Failure: Error> = Task<Success, Failure, Never, Any>
 
-public typealias Future<Success, Failure: Error, Canceling, Environment> = Task<Success, Failure, Canceling, Never, Environment>
-public typealias UnboundFuture<Success, Failure: Error, Canceling> = Task<Success, Failure, Canceling, Never, Any>
+public typealias Future<Success, Failure: Error, Environment> = Task<Success, Failure, Never, Environment>
+public typealias UnboundFuture<Success, Failure: Error> = Task<Success, Failure, Never, Any>
 
-public typealias Signal<Success, Failure: Error, Canceling, Environment> = Task<Success, Failure, Canceling, Success, Environment>
-public typealias UnboundSignal<Success, Failure: Error, Canceling> = Task<Success, Failure, Canceling, Success, Any>
+public typealias Signal<Success, Failure: Error, Environment> = Task<Success, Failure, Success, Environment>
+public typealias UnboundSignal<Success, Failure: Error> = Task<Success, Failure, Success, Any>
 
-public typealias UnboundTask<Success, Failure: Error, Canceling, Progress> = Task<Success, Failure, Canceling, Progress, Any>
+public typealias UnboundTask<Success, Failure: Error, Progress> = Task<Success, Failure, Progress, Any>
 
 public func identity<A>(_ x: A) -> A { x }
 public func absurd(_ never: Never) -> Never {}
@@ -40,18 +39,14 @@ extension Task where Environment == Any {
 }
 
 extension Task {
-  public func map<OtherSuccess, OtherFailure: Error, OtherCanceling, OtherProgress>(
+  public func map<OtherSuccess, OtherFailure: Error, OtherProgress>(
     success: @escaping (Success) -> OtherSuccess,
     failure: @escaping (Failure) -> OtherFailure,
-    canceling: @escaping (Canceling) -> OtherCanceling,
     progress: @escaping (Progress) -> OtherProgress
-  ) -> Task<OtherSuccess, OtherFailure, OtherCanceling, OtherProgress, Environment> {
+  ) -> Task<OtherSuccess, OtherFailure, OtherProgress, Environment> {
     .init { environment, yield in
       self.run(environment) { step in
         switch step {
-        case let .cancelable(x):
-          yield(.cancelable(canceling(x)))
-
         case let .ongoing(x):
           yield(.ongoing(progress(x)))
 
@@ -64,37 +59,28 @@ extension Task {
 
   public func mapSuccess<OtherSuccess>(
     _ transform: @escaping (Success) -> OtherSuccess
-  ) -> Task<OtherSuccess, Failure, Canceling, Progress, Environment> {
-    map(success: transform, failure: identity, canceling: identity, progress: identity)
+  ) -> Task<OtherSuccess, Failure, Progress, Environment> {
+    map(success: transform, failure: identity, progress: identity)
   }
 
   public func mapFailure<OtherFailure: Error>(
     transform: @escaping (Failure) -> OtherFailure
-  ) -> Task<Success, OtherFailure, Canceling, Progress, Environment> {
-    map(success: identity, failure: transform, canceling: identity, progress: identity)
-  }
-
-  public func mapCanceling<OtherCanceling>(
-    transform: @escaping (Canceling) -> OtherCanceling
-  ) -> Task<Success, Failure, OtherCanceling, Progress, Environment> {
-    map(success: identity, failure: identity, canceling: transform, progress: identity)
+  ) -> Task<Success, OtherFailure, Progress, Environment> {
+    map(success: identity, failure: transform, progress: identity)
   }
 
   public func mapProgress<OtherProgress>(
     transform: @escaping (Progress) -> OtherProgress
-  ) -> Task<Success, Failure, Canceling, OtherProgress, Environment> {
-    map(success: identity, failure: identity, canceling: identity, progress: transform)
+  ) -> Task<Success, Failure, OtherProgress, Environment> {
+    map(success: identity, failure: identity, progress: transform)
   }
 
   public func pullback<OtherEnvironment>(
     _ transform: @escaping (OtherEnvironment) -> Environment
-  ) -> Task<Success, Failure, Canceling, Progress, OtherEnvironment> {
+  ) -> Task<Success, Failure, Progress, OtherEnvironment> {
     .init { otherEnvironment, yield in
       self.run(transform(otherEnvironment)) { step in
         switch step {
-        case let .cancelable(x):
-          yield(.cancelable(x))
-
         case let .ongoing(x):
           yield(.ongoing(x))
 
@@ -105,7 +91,7 @@ extension Task {
     }
   }
 
-  public typealias Generic<A> = Task<A, Failure, Canceling, Progress, Environment>
+  public typealias Generic<A> = Task<A, Failure, Progress, Environment>
 
   public static func zip<A, B>(
     _ t1: Generic<A>,
@@ -127,9 +113,6 @@ extension Task {
 
       t1.run(environment) { step in
         switch step {
-        case let .cancelable(x):
-          yield(.cancelable(x))
-
         case let .ongoing(x):
           yield(.ongoing(x))
 
@@ -140,9 +123,6 @@ extension Task {
 
       t2.run(environment) { step in
         switch step {
-        case let .cancelable(x):
-          yield(.cancelable(x))
-
         case let .ongoing(x):
           yield(.ongoing(x))
 
@@ -172,14 +152,11 @@ extension Task {
   }
 
   public func flatMapSuccess<OtherSuccess>(
-    _ transform: @escaping (Success) -> Task<OtherSuccess, Failure, Canceling, Progress, Environment>
-  ) -> Task<OtherSuccess, Failure, Canceling, Progress, Environment> {
+    _ transform: @escaping (Success) -> Task<OtherSuccess, Failure, Progress, Environment>
+  ) -> Task<OtherSuccess, Failure, Progress, Environment> {
     .init { environment, yield in
       self.run(environment) { step in
         switch step {
-        case let .cancelable(x):
-          yield(.cancelable(x))
-
         case let .ongoing(x):
           yield(.ongoing(x))
 
@@ -194,14 +171,11 @@ extension Task {
   }
 
   public func flatMapFailure<OtherFailure: Error>(
-    _ transform: @escaping (Failure) -> Task<Success, OtherFailure, Canceling, Progress, Environment>
-  ) -> Task<Success, OtherFailure, Canceling, Progress, Environment> {
+    _ transform: @escaping (Failure) -> Task<Success, OtherFailure, Progress, Environment>
+  ) -> Task<Success, OtherFailure, Progress, Environment> {
     .init { environment, yield in
       self.run(environment) { step in
         switch step {
-        case let .cancelable(x):
-          yield(.cancelable(x))
-
         case let .ongoing(x):
           yield(.ongoing(x))
 
