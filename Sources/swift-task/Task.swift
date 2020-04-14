@@ -88,11 +88,9 @@ extension Task {
     }
   }
 
-  public typealias Generic<A> = Task<A, Failure, Progress, Environment>
-
   public static func zip<A, B>(
-    _ t1: Generic<A>,
-    _ t2: Generic<B>,
+    _ t1: Task<A, Failure, Progress, Environment>,
+    _ t2: Task<B, Failure, Progress, Environment>,
     uniquingFailuresWith mergeFailures: @escaping (Failure, Failure) -> Failure
   ) -> Self where Success == (A, B) {
     .init { environment, yield in
