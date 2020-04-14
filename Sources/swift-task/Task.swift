@@ -4,7 +4,7 @@ public struct Task<Success, Failure: Error, Progress, Environment> {
     case completed(Result<Success, Failure>)
   }
 
-  public let run: (Environment, @escaping (Step) -> Void) -> Void
+  public var run: (Environment, @escaping (Step) -> Void) -> Void
   public init(run: @escaping (Environment, @escaping (Step) -> Void) -> Void) {
     self.run = run
   }
@@ -110,12 +110,6 @@ extension Task {
     }
   }
 
-  public static func failed(_ value: Failure) -> Self {
-    .init { _, yield in
-      yield(.completed(.failure(value)))
-    }
-  }
-
   public func flatMapSuccess<OtherSuccess>(
     _ transform: @escaping (Success) -> Task<OtherSuccess, Failure, Progress, Environment>
   ) -> Task<OtherSuccess, Failure, Progress, Environment> {
@@ -132,6 +126,18 @@ extension Task {
           transform(x).run(environment, yield)
         }
       }
+    }
+  }
+
+  public func mapSuccess<OtherSuccess>(
+    _ transform: @escaping (Success) -> OtherSuccess
+  ) -> Task<OtherSuccess, Failure, Progress, Environment> {
+    flatMapSuccess { .succeeded(transform($0)) }
+  }
+
+  public static func failed(_ value: Failure) -> Self {
+    .init { _, yield in
+      yield(.completed(.failure(value)))
     }
   }
 
@@ -152,12 +158,6 @@ extension Task {
         }
       }
     }
-  }
-
-  public func mapSuccess<OtherSuccess>(
-    _ transform: @escaping (Success) -> OtherSuccess
-  ) -> Task<OtherSuccess, Failure, Progress, Environment> {
-    flatMapSuccess { .succeeded(transform($0)) }
   }
 
   public func mapFailure<OtherFailure: Error>(
@@ -248,19 +248,19 @@ extension Task where Environment == Any {
 }
 
 public struct UniqueCancel: Equatable, Hashable {
-  public let id: AnyHashable
-  public let cancel: () -> Void
+  private let id: AnyHashable
+  public let run: () -> Void
 
   public init(
     id: AnyHashable,
-    cancel: @escaping () -> Void
+    run: @escaping () -> Void
   ) {
     self.id = id
-    self.cancel = cancel
+    self.run = run
   }
 
   public func callAsFunction() {
-    cancel()
+    run()
   }
 
   public static func == (lhs: Self, rhs: Self) -> Bool {
@@ -276,15 +276,15 @@ public final class UniqueCancelBag {
   private var cancels: Set<UniqueCancel> = []
 
   public func add(_ cancel: UniqueCancel) {
-    if let previous = cancels.remove(cancel) {
-      previous.cancel()
+    if let cancelPrevious = cancels.remove(cancel) {
+      cancelPrevious()
     }
 
     cancels.insert(cancel)
   }
 
   deinit {
-    cancels.forEach { $0.cancel() }
+    cancels.forEach { $0() }
   }
 }
 
