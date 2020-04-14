@@ -36,19 +36,119 @@ extension Task where Environment == Any {
 }
 
 extension Task {
-  public func map<OtherSuccess, OtherFailure: Error, OtherProgress>(
-    success: @escaping (Success) -> OtherSuccess,
-    failure: @escaping (Failure) -> OtherFailure,
-    progress: @escaping (Progress) -> OtherProgress
-  ) -> Task<OtherSuccess, OtherFailure, OtherProgress, Environment> {
+  public func pullback<OtherSuccess, OtherFailure: Error, OtherProgress, OtherEnvironment>(
+    success: @escaping (OtherEnvironment, Success) -> OtherSuccess,
+    failure: @escaping (OtherEnvironment, Failure) -> OtherFailure,
+    progress: @escaping (OtherEnvironment, Progress) -> OtherProgress,
+    environment: @escaping (OtherEnvironment) -> Environment
+  ) -> Task<OtherSuccess, OtherFailure, OtherProgress, OtherEnvironment> {
+    .init { otherEnvironment, yield in
+      self.run(environment(otherEnvironment)) { step in
+        switch step {
+        case let .ongoing(x):
+          yield(.ongoing(progress(otherEnvironment, x)))
+
+        case let .completed(x):
+          yield(
+            .completed(x
+              .map { success(otherEnvironment, $0) }
+              .mapError { failure(otherEnvironment, $0) }
+            )
+          )
+        }
+      }
+    }
+  }
+
+  public func changingSuccess<OtherSuccess>(
+    _ transform: @escaping (Environment, Success) -> OtherSuccess
+  ) -> Task<OtherSuccess, Failure, Progress, Environment> {
+    pullback(
+      success: transform,
+      failure: getSecond,
+      progress: getSecond,
+      environment: identity
+    )
+  }
+
+  public func changingFailure<OtherFailure: Error>(
+    _ transform: @escaping (Environment, Failure) -> OtherFailure
+  ) -> Task<Success, OtherFailure, Progress, Environment> {
+    pullback(
+      success: getSecond,
+      failure: transform,
+      progress: getSecond,
+      environment: identity
+    )
+  }
+
+  public func changingProgress<OtherProgress>(
+    _ transform: @escaping (Environment, Progress) -> OtherProgress
+  ) -> Task<Success, Failure, OtherProgress, Environment> {
+    pullback(
+      success: getSecond,
+      failure: getSecond,
+      progress: transform,
+      environment: identity
+    )
+  }
+
+  public func changingEnvironment<OtherEnvironment>(
+    _ transform: @escaping (OtherEnvironment) -> Environment
+  ) -> Task<Success, Failure, Progress, OtherEnvironment> {
+    pullback(
+      success: getSecond,
+      failure: getSecond,
+      progress: getSecond,
+      environment: transform
+    )
+  }
+
+  public static func succeeded(_ value: Success) -> Self {
+    .init { _, yield in
+      yield(.completed(.success(value)))
+    }
+  }
+
+  public static func failed(_ value: Failure) -> Self {
+    .init { _, yield in
+      yield(.completed(.failure(value)))
+    }
+  }
+
+  public func flatMapSuccess<OtherSuccess>(
+    _ transform: @escaping (Success) -> Task<OtherSuccess, Failure, Progress, Environment>
+  ) -> Task<OtherSuccess, Failure, Progress, Environment> {
     .init { environment, yield in
       self.run(environment) { step in
         switch step {
         case let .ongoing(x):
-          yield(.ongoing(progress(x)))
+          yield(.ongoing(x))
 
-        case let .completed(x):
-          yield(.completed(x.map(success).mapError(failure)))
+        case let .completed(.failure(x)):
+          yield(.completed(.failure(x)))
+
+        case let .completed(.success(x)):
+          transform(x).run(environment, yield)
+        }
+      }
+    }
+  }
+
+  public func flatMapFailure<OtherFailure: Error>(
+    _ transform: @escaping (Failure) -> Task<Success, OtherFailure, Progress, Environment>
+  ) -> Task<Success, OtherFailure, Progress, Environment> {
+    .init { environment, yield in
+      self.run(environment) { step in
+        switch step {
+        case let .ongoing(x):
+          yield(.ongoing(x))
+
+        case let .completed(.success(x)):
+          yield(.completed(.success(x)))
+
+        case let .completed(.failure(x)):
+          transform(x).run(environment, yield)
         }
       }
     }
@@ -57,35 +157,17 @@ extension Task {
   public func mapSuccess<OtherSuccess>(
     _ transform: @escaping (Success) -> OtherSuccess
   ) -> Task<OtherSuccess, Failure, Progress, Environment> {
-    map(success: transform, failure: identity, progress: identity)
+    flatMapSuccess { .succeeded(transform($0)) }
   }
 
   public func mapFailure<OtherFailure: Error>(
     _ transform: @escaping (Failure) -> OtherFailure
   ) -> Task<Success, OtherFailure, Progress, Environment> {
-    map(success: identity, failure: transform, progress: identity)
+    flatMapFailure { .failed(transform($0)) }
   }
 
-  public func mapProgress<OtherProgress>(
-    _ transform: @escaping (Progress) -> OtherProgress
-  ) -> Task<Success, Failure, OtherProgress, Environment> {
-    map(success: identity, failure: identity, progress: transform)
-  }
-
-  public func pullback<OtherEnvironment>(
-    _ transform: @escaping (OtherEnvironment) -> Environment
-  ) -> Task<Success, Failure, Progress, OtherEnvironment> {
-    .init { otherEnvironment, yield in
-      self.run(transform(otherEnvironment)) { step in
-        switch step {
-        case let .ongoing(x):
-          yield(.ongoing(x))
-
-        case let .completed(x):
-          yield(.completed(x))
-        }
-      }
-    }
+  public func or(_ other: @escaping @autoclosure () -> Self) -> Self {
+    flatMapFailure { _ in other() }
   }
 
   public static func zip<A, B>(
@@ -145,65 +227,23 @@ extension Task {
       }
     }
   }
-
-  public func flatMapSuccess<OtherSuccess>(
-    _ transform: @escaping (Success) -> Task<OtherSuccess, Failure, Progress, Environment>
-  ) -> Task<OtherSuccess, Failure, Progress, Environment> {
-    .init { environment, yield in
-      self.run(environment) { step in
-        switch step {
-        case let .ongoing(x):
-          yield(.ongoing(x))
-
-        case let .completed(.failure(x)):
-          yield(.completed(.failure(x)))
-
-        case let .completed(.success(x)):
-          transform(x).run(environment, yield)
-        }
-      }
-    }
-  }
-
-  public func flatMapFailure<OtherFailure: Error>(
-    _ transform: @escaping (Failure) -> Task<Success, OtherFailure, Progress, Environment>
-  ) -> Task<Success, OtherFailure, Progress, Environment> {
-    .init { environment, yield in
-      self.run(environment) { step in
-        switch step {
-        case let .ongoing(x):
-          yield(.ongoing(x))
-
-        case let .completed(.success(x)):
-          yield(.completed(.success(x)))
-
-        case let .completed(.failure(x)):
-          transform(x).run(environment, yield)
-        }
-      }
-    }
-  }
-
-  public func or(_ other: @escaping @autoclosure () -> Self) -> Self {
-    flatMapFailure { _ in other() }
-  }
 }
 
 extension Task where Failure == Never {
   public func settingFailureType<Forced: Error>(to _: Forced.Type) -> Task<Success, Forced, Progress, Environment> {
-    mapFailure(absurd)
+    changingFailure { absurd($1) }
   }
 }
 
 extension Task where Progress == Never {
   public func settingProgressType<Forced>(to _: Forced.Type) -> Task<Success, Failure, Forced, Environment> {
-    mapProgress(absurd)
+    changingProgress { absurd($1) }
   }
 }
 
 extension Task where Environment == Any {
   public func settingEnvironmentType<Forced>(to _: Forced.Type) -> Task<Success, Failure, Progress, Forced> {
-    pullback(identity)
+    changingEnvironment(identity)
   }
 }
 
@@ -270,4 +310,5 @@ public typealias CancelableUnboundTask<Success, Failure: Error, Progress> = Task
 // MARK: - Private
 
 private func identity<A>(_ x: A) -> A { x }
-private func absurd<A>(_ never: Never) -> A {}
+private func getSecond<A, B>(_: A, _ b: B) -> B { b }
+private func absurd<A>(_: Never) -> A {}
