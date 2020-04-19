@@ -4,12 +4,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "Task",
+    name: "SwiftTask",
     products: [
-        .library(name: "Task", targets: ["swift-task"]),
+        .library(name: "swift-task", targets: ["SwiftTask"]),
+        .library(name: "swift-task-foundation", targets: ["SwiftTaskFoundation"]),
     ],
     targets: [
-        .target(name: "swift-task", dependencies: []),
-        .testTarget(name: "swift-taskTests", dependencies: ["swift-task"]),
+        .target(name: "SwiftTask", dependencies: []),
+        .target(name: "SwiftTaskFoundation", dependencies: ["SwiftTask"]),
+        .testTarget(name: "SwiftTaskTests", dependencies: ["SwiftTask"]),
     ]
 )
