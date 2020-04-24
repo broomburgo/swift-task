@@ -29,7 +29,7 @@ public enum HTTPError: Error {
 }
 
 extension Task where
-  Success == HTTPResponse,
+  Success == CancelableValue<HTTPResponse>,
   Failure == HTTPError,
   Progress == CancelableOngoing<Double>,
   Environment == URLSession {
@@ -53,10 +53,14 @@ extension Task where
 
 // MARK: - Private
 
-extension Result where Success == HTTPResponse, Failure == HTTPError {
+extension Result where
+  Success == CancelableValue<HTTPResponse>,
+  Failure == HTTPError {
   fileprivate init(data: Data?, response: URLResponse?, error: Error?) {
     if let error = error {
-      self = .failure(.requestFailed(error))
+      self = (error as NSError).code == NSURLErrorCancelled
+        ? .success(.canceled)
+        : .failure(.requestFailed(error))
       return
     }
 
@@ -70,6 +74,6 @@ extension Result where Success == HTTPResponse, Failure == HTTPError {
       return
     }
 
-    self = .success(.init(response: httpResponse, data: data))
+    self = .success(.done(HTTPResponse(response: httpResponse, data: data)))
   }
 }
