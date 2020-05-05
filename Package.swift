@@ -4,10 +4,10 @@
 import PackageDescription
 
 let package = Package(
-    name: "SwiftTask",
+    name: "swift-task",
     products: [
-        .library(name: "swift-task", targets: ["SwiftTask"]),
-        .library(name: "swift-task-foundation", targets: ["SwiftTaskFoundation"]),
+      .library(name: "SwiftTask", type: .dynamic, targets: ["SwiftTask"]),
+        .library(name: "SwiftTaskFoundation", type: .dynamic, targets: ["SwiftTaskFoundation"]),
     ],
     targets: [
         .target(name: "SwiftTask", dependencies: []),

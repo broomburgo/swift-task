@@ -41,8 +41,10 @@ extension Task where
         yield(.completed(Result(data: $0, response: $1, error: $2)))
       }
 
-      progressObservation = dataTask.observe(\.progress) { dataTask, _ in
-        yield(.ongoing(.next(dataTask.progress.fractionCompleted)))
+      if #available(macOS 10.13, *) {
+        progressObservation = dataTask.observe(\.progress) { dataTask, _ in
+          yield(.ongoing(.next(dataTask.progress.fractionCompleted)))
+        }
       }
 
       dataTask.resume()
