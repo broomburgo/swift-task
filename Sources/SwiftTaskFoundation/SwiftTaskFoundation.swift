@@ -5,8 +5,8 @@ import SwiftTask
 
 extension Task {
   public func receive(on queue: DispatchQueue) -> Task {
-    Task { environment, yield in
-      self.run(environment) { step in
+    Task { env, yield in
+      self(environment: env) { step in
         queue.async {
           yield(step)
         }

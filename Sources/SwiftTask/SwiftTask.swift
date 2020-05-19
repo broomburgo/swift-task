@@ -1,11 +1,26 @@
+// MARK: - Task
+
 public struct Task<Success, Failure: Error, Progress, Environment> {
+  private typealias Generic<S, F: Error, P, E> = Task<S, F, P, E>
+
   public enum Step {
     case ongoing(Progress)
     case completed(Result<Success, Failure>)
   }
 
-  public var run: (Environment, @escaping (Step) -> Void) -> Void
-  public init(run: @escaping (Environment, @escaping (Step) -> Void) -> Void) {
+  public struct Execute {
+    private var run: (Environment) -> Void
+    fileprivate init(_ run: @escaping (Environment) -> Void) {
+      self.run = run
+    }
+
+    public func callAsFunction(environment: Environment) {
+      run(environment)
+    }
+  }
+
+  private var run: (Environment, @escaping (Step) -> Void) -> Void
+  public init(_ run: @escaping (Environment, @escaping (Step) -> Void) -> Void) {
     self.run = run
   }
 
@@ -13,8 +28,24 @@ public struct Task<Success, Failure: Error, Progress, Environment> {
     run(environment, callback)
   }
 
-  public func ready(_ callback: @escaping (Step) -> Void) -> (Environment) -> Void {
-    { self.run($0, callback) }
+  public func ready(_ callback: @escaping (Step) -> Void) -> Execute {
+    Execute { self.run($0, callback) }
+  }
+}
+
+extension Task where Environment == Any {
+  public func callAsFunction(callback: @escaping (Step) -> Void) {
+    run((), callback)
+  }
+
+  public func ready(_ callback: @escaping (Step) -> Void) -> () -> Void {
+    { self.run((), callback) }
+  }
+}
+
+extension Task.Execute where Environment == Any {
+  public func callAsFunction() {
+    run(())
   }
 }
 
@@ -29,11 +60,7 @@ public typealias UnboundSignal<Success, Failure: Error> = Task<Success, Failure,
 
 public typealias UnboundTask<Success, Failure: Error, Progress> = Task<Success, Failure, Progress, Any>
 
-extension Task where Environment == Any {
-  public func ready(_ callback: @escaping (Step) -> Void) -> () -> Void {
-    { self.run((), callback) }
-  }
-}
+// MARK: - Combinators
 
 extension Task {
   public func pullback<OtherSuccess, OtherFailure: Error, OtherProgress, OtherEnvironment>(
@@ -42,7 +69,7 @@ extension Task {
     progress: @escaping (OtherEnvironment, Progress) -> OtherProgress,
     environment: @escaping (OtherEnvironment) -> Environment
   ) -> Task<OtherSuccess, OtherFailure, OtherProgress, OtherEnvironment> {
-    .init { otherEnvironment, yield in
+    Generic { otherEnvironment, yield in
       self.run(environment(otherEnvironment)) { step in
         switch step {
         case let .ongoing(x):
@@ -105,7 +132,7 @@ extension Task {
   }
 
   public static func succeeded(_ value: Success) -> Self {
-    .init { _, yield in
+    Generic { _, yield in
       yield(.completed(.success(value)))
     }
   }
@@ -113,7 +140,7 @@ extension Task {
   public func flatMapSuccess<OtherSuccess>(
     _ transform: @escaping (Success) -> Task<OtherSuccess, Failure, Progress, Environment>
   ) -> Task<OtherSuccess, Failure, Progress, Environment> {
-    .init { environment, yield in
+    Generic { environment, yield in
       self.run(environment) { step in
         switch step {
         case let .ongoing(x):
@@ -136,7 +163,7 @@ extension Task {
   }
 
   public static func failed(_ value: Failure) -> Self {
-    .init { _, yield in
+    Generic { _, yield in
       yield(.completed(.failure(value)))
     }
   }
@@ -144,7 +171,7 @@ extension Task {
   public func flatMapFailure<OtherFailure: Error>(
     _ transform: @escaping (Failure) -> Task<Success, OtherFailure, Progress, Environment>
   ) -> Task<Success, OtherFailure, Progress, Environment> {
-    .init { environment, yield in
+    Generic { environment, yield in
       self.run(environment) { step in
         switch step {
         case let .ongoing(x):
@@ -175,7 +202,7 @@ extension Task {
     _ t2: Task<B, Failure, Progress, Environment>,
     uniquingFailuresWith mergeFailures: @escaping (Failure, Failure) -> Failure
   ) -> Self where Success == (A, B) {
-    .init { environment, yield in
+    Generic { environment, yield in
       var t1Result: Result<A, Failure>? {
         didSet {
           yieldIfPossible(t1Result, t2Result)
@@ -246,6 +273,8 @@ extension Task where Environment == Any {
     changingEnvironment(identity)
   }
 }
+
+// MARK: - Canceling
 
 public struct UniqueCancel: Equatable, Hashable {
   private let id: AnyHashable
