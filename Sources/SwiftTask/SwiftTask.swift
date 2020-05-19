@@ -37,10 +37,6 @@ extension Task where Environment == Any {
   public func callAsFunction(callback: @escaping (Step) -> Void) {
     run((), callback)
   }
-
-  public func ready(_ callback: @escaping (Step) -> Void) -> () -> Void {
-    { self.run((), callback) }
-  }
 }
 
 extension Task.Execute where Environment == Any {
