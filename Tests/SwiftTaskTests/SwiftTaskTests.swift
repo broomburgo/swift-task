@@ -7,7 +7,7 @@ final class swift_taskTests: XCTestCase {
     let task = Async<String>(completed: .success(expected))
 
     var received: String?
-    task.callAsFunction(onCompleted: {
+    task.callAsFunction(onComplete: {
       switch $0 {
       case .success(let value):
         received = value

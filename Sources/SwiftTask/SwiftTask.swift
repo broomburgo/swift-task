@@ -20,18 +20,60 @@ public struct Task<Success, Failure: Error, Progress, Environment> {
   public func callAsFunction(environment: Environment, onStep: @escaping (Step) -> Void) {
     run(environment, onStep)
   }
+
+  public func onStep(_ callback: @escaping (Step) -> Void) -> Self {
+    Self { environment, yield in
+      self.run(environment) { step in
+        callback(step)
+        yield(step)
+      }
+    }
+  }
 }
 
 extension Task where Progress == Never {
-  public func callAsFunction(environment: Environment, onCompleted: @escaping (Result<Success, Failure>) -> Void) {
+  public func callAsFunction(environment: Environment, onComplete: @escaping (Result<Success, Failure>) -> Void) {
     run(environment) { step in
       switch step {
       case let .ongoing(x):
         impossible(x)
 
       case let .completed(result):
-        onCompleted(result)
+        onComplete(result)
       }
+    }
+  }
+
+  public func onComplete(_ callback: @escaping (Result<Success, Failure>) -> Void) -> Self {
+    Self { environment, yield in
+      self(environment: environment, onComplete: { result in
+        callback(result)
+        yield(.completed(result))
+      })
+    }
+  }
+}
+
+extension Task where Failure == Never, Progress == Never {
+  public func callAsFunction(environment: Environment, onSuccess: @escaping (Success) -> Void) {
+    run(environment) { step in
+      switch step {
+      case let .ongoing(x),
+           let .completed(.failure(x)):
+        impossible(x)
+
+      case let .completed(.success(value)):
+        onSuccess(value)
+      }
+    }
+  }
+
+  public func onSuccess(_ callback: @escaping (Success) -> Void) -> Self {
+    Self { environment, yield in
+      self(environment: environment, onSuccess: { value in
+        callback(value)
+        yield(.completed(.success(value)))
+      })
     }
   }
 }
@@ -43,16 +85,14 @@ extension Task where Environment == Any {
 }
 
 extension Task where Progress == Never, Environment == Any {
-  public func callAsFunction(onCompleted: @escaping (Result<Success, Failure>) -> Void) {
-    run(()) { step in
-      switch step {
-      case let .ongoing(x):
-        impossible(x)
+  public func callAsFunction(onComplete: @escaping (Result<Success, Failure>) -> Void) {
+    self(environment: (), onComplete: onComplete)
+  }
+}
 
-      case let .completed(result):
-        onCompleted(result)
-      }
-    }
+extension Task where Failure == Never, Progress == Never, Environment == Any {
+  public func callAsFunction(onSuccess: @escaping (Success) -> Void) {
+    self(environment: (), onSuccess: onSuccess)
   }
 }
 
@@ -307,35 +347,17 @@ extension Task {
       )
     }
   }
-
-  public func onStep(_ callback: @escaping (Step) -> Void) -> Self {
-    Self { environment, yield in
-      self.run(environment) { step in
-        callback(step)
-        yield(step)
-      }
-    }
-  }
 }
 
 extension Task where Failure == Never {
   public func settingFailureType<Forced: Error>(to _: Forced.Type) -> Task<Success, Forced, Progress, Environment> {
-    changingFailure { impossible($1) }
+    mapFailure { impossible($0) }
   }
 }
 
 extension Task where Progress == Never {
   public func settingProgressType<Forced>(to _: Forced.Type) -> Task<Success, Failure, Forced, Environment> {
-    changingProgress { impossible($1) }
-  }
-
-  public func onComplete(_ callback: @escaping (Result<Success, Failure>) -> Void) -> Self {
-    Self { environment, yield in
-      self(environment: environment, onCompleted: { result in
-        callback(result)
-        yield(.completed(result))
-      })
-    }
+    mapProgress { impossible($0) }
   }
 }
 
@@ -409,10 +431,10 @@ public typealias CancelableUnboundTask<Success, Failure: Error, Progress> = Task
 
 // MARK: - Private
 
-private func impossible<A>(_ never: Never) -> A {
+private func impossible<A>(_: Never) -> A {
   /// This will never be executed.
 }
 
-private func impossible(_ never: Never) {
+private func impossible(_: Never) {
   /// This will never be executed.
 }
