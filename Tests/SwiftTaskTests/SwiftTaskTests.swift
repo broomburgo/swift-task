@@ -25,7 +25,7 @@ final class SwiftTaskTests: XCTestCase {
   func testSuccessfulTaskYieldsProperResult() {
     let expectedValue = 42
 
-    let task = LocalUnfailableTask.init(completed: .success(expectedValue))
+    let task = LocalUnfailableTask(completed: .success(expectedValue))
 
     var gotValue: Int?
     task(onSuccess: {
@@ -414,7 +414,7 @@ final class SwiftTaskTests: XCTestCase {
     var r1: LocalResult?
     t1.onStep {
       switch $0 {
-      case .ongoing(_):
+      case .ongoing:
         fatalError()
 
       case .completed(let result):
@@ -438,13 +438,13 @@ final class SwiftTaskTests: XCTestCase {
 
     var r1: LocalResult?
     t1.onStep {
-        switch $0 {
-        case .ongoing(_):
-          fatalError()
+      switch $0 {
+      case .ongoing:
+        fatalError()
 
-        case .completed(let result):
-          r1 = result
-        }
+      case .completed(let result):
+        r1 = result
+      }
     }(onStep: { _ in })
 
     var r2: LocalResult?
@@ -513,6 +513,37 @@ final class SwiftTaskTests: XCTestCase {
 
     XCTAssertEqual(r1, 42)
     XCTAssertEqual(r1, r2)
+  }
+
+  func testSettingTypesTo() {
+    let task = LocalUnfailableTask(completed: .success(42))
+
+    XCTAssert(
+      type(
+        of: task.settingFailureType(to: String.self)
+      ) == Task<Int, String, Never, Any>.self
+    )
+
+    XCTAssert(
+      type(
+        of: task.settingProgressType(to: Double.self)
+      ) == Task<Int, Never, Double, Any>.self
+    )
+
+    XCTAssert(
+      type(
+        of: task.settingEnvironmentType(to: Bool.self)
+      ) == Task<Int, Never, Never, Bool>.self
+    )
+
+    XCTAssert(
+      type(
+        of: task
+          .settingFailureType(to: String.self)
+          .settingProgressType(to: Double.self)
+          .settingEnvironmentType(to: Bool.self)
+      ) == Task<Int, String, Double, Bool>.self
+    )
   }
 
   /// Add tests for cancelables
