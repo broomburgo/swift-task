@@ -4,6 +4,7 @@ import XCTest
 extension String: Error {}
 private typealias LocalResult = Result<Int, String>
 private typealias LocalTask = Task<Int, String, Never, Any>
+private typealias LocalUnfailableTask = Task<Int, Never, Never, Any>
 private typealias LocalTaskWithEnv = Task<Int, String, Never, Bool>
 private typealias LocalTaskWithProgress = Task<Int, String, Double, Any>
 
@@ -14,11 +15,24 @@ final class SwiftTaskTests: XCTestCase {
     let task = LocalTask(completed: expectedResult)
 
     var gotResult: LocalResult?
-    task(onComplete: {
+    task(onCompleted: {
       gotResult = $0
     })
 
     XCTAssertEqual(gotResult, expectedResult)
+  }
+
+  func testSuccessfulTaskYieldsProperResult() {
+    let expectedValue = 42
+
+    let task = LocalUnfailableTask.init(completed: .success(expectedValue))
+
+    var gotValue: Int?
+    task(onSuccess: {
+      gotValue = $0
+    })
+
+    XCTAssertEqual(gotValue, expectedValue)
   }
 
   func testCompletedTaskWithEnvYieldsProperResult() {
@@ -33,7 +47,7 @@ final class SwiftTaskTests: XCTestCase {
     var gotResult: LocalResult?
     task(
       environment: expectedEnv,
-      onComplete: {
+      onCompleted: {
         gotResult = $0
       }
     )
@@ -48,7 +62,7 @@ final class SwiftTaskTests: XCTestCase {
     let mappedTask = successfulTask.mapSuccess { $0 + 1 }
 
     var gotResult: LocalResult?
-    mappedTask(onComplete: {
+    mappedTask(onCompleted: {
       gotResult = $0
     })
 
@@ -62,7 +76,7 @@ final class SwiftTaskTests: XCTestCase {
     let unmappedTask = failedTask.mapSuccess { $0 + 1 }
 
     var gotResult: LocalResult?
-    unmappedTask(onComplete: {
+    unmappedTask(onCompleted: {
       gotResult = $0
     })
 
@@ -76,7 +90,7 @@ final class SwiftTaskTests: XCTestCase {
     let unmappedTask = successfulTask.mapFailure { $0 + "!" }
 
     var gotResult: LocalResult?
-    unmappedTask(onComplete: {
+    unmappedTask(onCompleted: {
       gotResult = $0
     })
 
@@ -90,7 +104,7 @@ final class SwiftTaskTests: XCTestCase {
     let mappedTask = failedTask.mapFailure { $0 + "!" }
 
     var gotResult: LocalResult?
-    mappedTask(onComplete: {
+    mappedTask(onCompleted: {
       gotResult = $0
     })
 
@@ -130,14 +144,14 @@ final class SwiftTaskTests: XCTestCase {
     let mappedTask = task.mapEnvironment { !$0 }
 
     var gotResult1: LocalResult?
-    mappedTask(environment: true, onComplete: {
+    mappedTask(environment: true, onCompleted: {
       gotResult1 = $0
     })
 
     XCTAssertEqual(gotResult1, .success(-value))
 
     var gotResult2: LocalResult?
-    mappedTask(environment: false, onComplete: {
+    mappedTask(environment: false, onCompleted: {
       gotResult2 = $0
     })
 
@@ -162,25 +176,25 @@ final class SwiftTaskTests: XCTestCase {
     }
 
     var successToSuccess: LocalResult?
-    successTask.flatMapSuccess(toSecondarySuccess)(onComplete: {
+    successTask.flatMapSuccess(toSecondarySuccess)(onCompleted: {
       successToSuccess = $0
     })
     XCTAssertEqual(successToSuccess, .success(84))
 
     var successToFailure: LocalResult?
-    successTask.flatMapSuccess(toSecondaryFailure)(onComplete: {
+    successTask.flatMapSuccess(toSecondaryFailure)(onCompleted: {
       successToFailure = $0
     })
     XCTAssertEqual(successToFailure, .failure("42"))
 
     var failureToSuccess: LocalResult?
-    failureTask.flatMapSuccess(toSecondarySuccess)(onComplete: {
+    failureTask.flatMapSuccess(toSecondarySuccess)(onCompleted: {
       failureToSuccess = $0
     })
     XCTAssertEqual(failureToSuccess, .failure("howdy"))
 
     var failureToFailure: LocalResult?
-    failureTask.flatMapSuccess(toSecondaryFailure)(onComplete: {
+    failureTask.flatMapSuccess(toSecondaryFailure)(onCompleted: {
       failureToFailure = $0
     })
     XCTAssertEqual(failureToFailure, .failure("howdy"))
@@ -204,25 +218,25 @@ final class SwiftTaskTests: XCTestCase {
     }
 
     var successToSuccess: LocalResult?
-    successTask.flatMapFailure(toSecondarySuccess)(onComplete: {
+    successTask.flatMapFailure(toSecondarySuccess)(onCompleted: {
       successToSuccess = $0
     })
     XCTAssertEqual(successToSuccess, .success(42))
 
     var successToFailure: LocalResult?
-    successTask.flatMapFailure(toSecondaryFailure)(onComplete: {
+    successTask.flatMapFailure(toSecondaryFailure)(onCompleted: {
       successToFailure = $0
     })
     XCTAssertEqual(successToFailure, .success(42))
 
     var failureToSuccess: LocalResult?
-    failureTask.flatMapFailure(toSecondarySuccess)(onComplete: {
+    failureTask.flatMapFailure(toSecondarySuccess)(onCompleted: {
       failureToSuccess = $0
     })
     XCTAssertEqual(failureToSuccess, .success(5))
 
     var failureToFailure: LocalResult?
-    failureTask.flatMapFailure(toSecondaryFailure)(onComplete: {
+    failureTask.flatMapFailure(toSecondaryFailure)(onCompleted: {
       failureToFailure = $0
     })
     XCTAssertEqual(failureToFailure, .failure("howdy!"))
@@ -243,13 +257,13 @@ final class SwiftTaskTests: XCTestCase {
     )
 
     var r1: LocalResult?
-    z1(onComplete: { r1 = $0 })
+    z1(onCompleted: { r1 = $0 })
 
     var r2: LocalResult?
-    z2(onComplete: { r2 = $0 })
+    z2(onCompleted: { r2 = $0 })
 
     var r3: LocalResult?
-    z3(onComplete: { r3 = $0 })
+    z3(onCompleted: { r3 = $0 })
 
     XCTAssertEqual(r1, .success(111))
     XCTAssertEqual(r1, r2)
@@ -269,19 +283,19 @@ final class SwiftTaskTests: XCTestCase {
     let ff = Task.zipWith(f1, f2, +, uniquingFailuresWith: +)
 
     var rss: LocalResult?
-    ss(onComplete: { rss = $0 })
+    ss(onCompleted: { rss = $0 })
     XCTAssertEqual(rss, .success(11))
 
     var rsf: LocalResult?
-    sf(onComplete: { rsf = $0 })
+    sf(onCompleted: { rsf = $0 })
     XCTAssertEqual(rsf, .failure("2"))
 
     var rfs: LocalResult?
-    fs(onComplete: { rfs = $0 })
+    fs(onCompleted: { rfs = $0 })
     XCTAssertEqual(rfs, .failure("1"))
 
     var rff: LocalResult?
-    ff(onComplete: { rff = $0 })
+    ff(onCompleted: { rff = $0 })
     XCTAssertEqual(rff, .failure("12"))
   }
 
@@ -298,19 +312,19 @@ final class SwiftTaskTests: XCTestCase {
     let ff = f1.or(f2)
 
     var rss: LocalResult?
-    ss(onComplete: { rss = $0 })
+    ss(onCompleted: { rss = $0 })
     XCTAssertEqual(rss, .success(1))
 
     var rsf: LocalResult?
-    sf(onComplete: { rsf = $0 })
+    sf(onCompleted: { rsf = $0 })
     XCTAssertEqual(rsf, .success(1))
 
     var rfs: LocalResult?
-    fs(onComplete: { rfs = $0 })
+    fs(onCompleted: { rfs = $0 })
     XCTAssertEqual(rfs, .success(10))
 
     var rff: LocalResult?
-    ff(onComplete: { rff = $0 })
+    ff(onCompleted: { rff = $0 })
     XCTAssertEqual(rff, .failure("2"))
   }
 
@@ -322,11 +336,11 @@ final class SwiftTaskTests: XCTestCase {
     let ffb = f.fallback(to: 10)
 
     var rsfb: LocalResult?
-    sfb(onComplete: { rsfb = $0 })
+    sfb(onCompleted: { rsfb = $0 })
     XCTAssertEqual(rsfb, .success(1))
 
     var rffb: LocalResult?
-    ffb(onComplete: { rffb = $0 })
+    ffb(onCompleted: { rffb = $0 })
     XCTAssertEqual(rffb, .success(10))
   }
 
@@ -338,7 +352,7 @@ final class SwiftTaskTests: XCTestCase {
     let ai = Task.allIn(first: s1, rest: [s2, s3]).mapSuccess { $0.reduce(0, +) }
 
     var r: LocalResult?
-    ai(onComplete: { r = $0 })
+    ai(onCompleted: { r = $0 })
 
     XCTAssertEqual(r, .success(111))
   }
@@ -362,35 +376,35 @@ final class SwiftTaskTests: XCTestCase {
     let aifff = Task.allIn(first: f1, rest: [f2, f3], uniquingFailuresWith: +).mapSuccess { $0.reduce(0, +) }
 
     var sss: LocalResult?
-    aisss(onComplete: { sss = $0 })
+    aisss(onCompleted: { sss = $0 })
     XCTAssertEqual(sss, .success(111))
 
     var ssf: LocalResult?
-    aissf(onComplete: { ssf = $0 })
+    aissf(onCompleted: { ssf = $0 })
     XCTAssertEqual(ssf, .failure("3"))
 
     var sfs: LocalResult?
-    aisfs(onComplete: { sfs = $0 })
+    aisfs(onCompleted: { sfs = $0 })
     XCTAssertEqual(sfs, .failure("2"))
 
     var fss: LocalResult?
-    aifss(onComplete: { fss = $0 })
+    aifss(onCompleted: { fss = $0 })
     XCTAssertEqual(fss, .failure("1"))
 
     var sff: LocalResult?
-    aisff(onComplete: { sff = $0 })
+    aisff(onCompleted: { sff = $0 })
     XCTAssertEqual(sff, .failure("23"))
 
     var fsf: LocalResult?
-    aifsf(onComplete: { fsf = $0 })
+    aifsf(onCompleted: { fsf = $0 })
     XCTAssertEqual(fsf, .failure("13"))
 
     var ffs: LocalResult?
-    aiffs(onComplete: { ffs = $0 })
+    aiffs(onCompleted: { ffs = $0 })
     XCTAssertEqual(ffs, .failure("12"))
 
     var fff: LocalResult?
-    aifff(onComplete: { fff = $0 })
+    aifff(onCompleted: { fff = $0 })
     XCTAssertEqual(fff, .failure("123"))
   }
 
@@ -398,13 +412,19 @@ final class SwiftTaskTests: XCTestCase {
     let t1 = LocalTask(completed: .success(42))
 
     var r1: LocalResult?
-    t1.onComplete {
-      r1 = $0
-    }(onComplete: { _ in })
+    t1.onStep {
+      switch $0 {
+      case .ongoing(_):
+        fatalError()
+
+      case .completed(let result):
+        r1 = result
+      }
+    }(onStep: { _ in })
 
     var r2: LocalResult?
     t1(
-      onComplete: {
+      onCompleted: {
         r2 = $0
       }
     )
@@ -417,13 +437,19 @@ final class SwiftTaskTests: XCTestCase {
     let t1 = LocalTask(completed: .failure("howdy"))
 
     var r1: LocalResult?
-    t1.onComplete {
-        r1 = $0
-    }(onComplete: { _ in })
+    t1.onStep {
+        switch $0 {
+        case .ongoing(_):
+          fatalError()
+
+        case .completed(let result):
+          r1 = result
+        }
+    }(onStep: { _ in })
 
     var r2: LocalResult?
     t1(
-      onComplete: {
+      onCompleted: {
         r2 = $0
       }
     )
@@ -432,17 +458,17 @@ final class SwiftTaskTests: XCTestCase {
     XCTAssertEqual(r1, r2)
   }
 
-  func testOnCompleteEquivalencySuccess() {
+  func testOnCompletedEquivalencySuccess() {
     let t1 = LocalTask(completed: .success(42))
 
     var r1: LocalResult?
-    t1.onComplete {
+    t1.onCompleted {
       r1 = $0
-    }(onStep: { _ in })
+    }(onCompleted: { _ in })
 
     var r2: LocalResult?
     t1(
-      onComplete: {
+      onCompleted: {
         r2 = $0
       }
     )
@@ -451,17 +477,17 @@ final class SwiftTaskTests: XCTestCase {
     XCTAssertEqual(r1, r2)
   }
 
-  func testOnCompleteEquivalencyFailure() {
+  func testOnCompletedEquivalencyFailure() {
     let t1 = LocalTask(completed: .failure("howdy"))
 
     var r1: LocalResult?
-    t1.onComplete {
+    t1.onCompleted {
       r1 = $0
-    }(onStep: { _ in })
+    }(onCompleted: { _ in })
 
     var r2: LocalResult?
     t1(
-      onComplete: {
+      onCompleted: {
         r2 = $0
       }
     )
@@ -469,6 +495,27 @@ final class SwiftTaskTests: XCTestCase {
     XCTAssertEqual(r1, .failure("howdy"))
     XCTAssertEqual(r1, r2)
   }
+
+  func testOnSuccessEquivalency() {
+    let t1 = LocalUnfailableTask(completed: .success(42))
+
+    var r1: Int?
+    t1.onSuccess {
+      r1 = $0
+    }(onSuccess: { _ in })
+
+    var r2: Int?
+    t1(
+      onSuccess: {
+        r2 = $0
+      }
+    )
+
+    XCTAssertEqual(r1, 42)
+    XCTAssertEqual(r1, r2)
+  }
+
+  /// Add tests for cancelables
 
   static var allTests = [
     ("testOr", testOr),
@@ -487,8 +534,8 @@ final class SwiftTaskTests: XCTestCase {
     ("testMapSuccessWithSuccess", testMapSuccessWithSuccess),
     ("testOnStepEquivalencyFailure", testOnStepEquivalencyFailure),
     ("testOnStepEquivalencySuccess", testOnStepEquivalencySuccess),
-    ("testOnCompleteEquivalencyFailure", testOnCompleteEquivalencyFailure),
-    ("testOnCompleteEquivalencySuccess", testOnCompleteEquivalencySuccess),
+    ("testOnCompletedEquivalencyFailure", testOnCompletedEquivalencyFailure),
+    ("testOnCompletedEquivalencySuccess", testOnCompletedEquivalencySuccess),
     ("testCompletedTaskYieldsProperResult", testCompletedTaskYieldsProperResult),
     ("testCompletedTaskWithEnvYieldsProperResult", testCompletedTaskWithEnvYieldsProperResult)
   ]

@@ -32,21 +32,21 @@ public struct Task<Success, Failure: Error, Progress, Environment> {
 }
 
 extension Task where Progress == Never {
-  public func callAsFunction(environment: Environment, onComplete: @escaping (Result<Success, Failure>) -> Void) {
+  public func callAsFunction(environment: Environment, onCompleted: @escaping (Result<Success, Failure>) -> Void) {
     run(environment) { step in
       switch step {
       case let .ongoing(x):
         impossible(x)
 
       case let .completed(result):
-        onComplete(result)
+        onCompleted(result)
       }
     }
   }
 
-  public func onComplete(_ callback: @escaping (Result<Success, Failure>) -> Void) -> Self {
+  public func onCompleted(_ callback: @escaping (Result<Success, Failure>) -> Void) -> Self {
     Self { environment, yield in
-      self(environment: environment, onComplete: { result in
+      self(environment: environment, onCompleted: { result in
         callback(result)
         yield(.completed(result))
       })
@@ -85,8 +85,8 @@ extension Task where Environment == Any {
 }
 
 extension Task where Progress == Never, Environment == Any {
-  public func callAsFunction(onComplete: @escaping (Result<Success, Failure>) -> Void) {
-    self(environment: (), onComplete: onComplete)
+  public func callAsFunction(onCompleted: @escaping (Result<Success, Failure>) -> Void) {
+    self(environment: (), onCompleted: onCompleted)
   }
 }
 

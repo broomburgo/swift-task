@@ -15,7 +15,7 @@ final class SwiftTaskFoundationTests: XCTestCase {
     let task = LocalTask(completed: .success(42))
 
     var result: LocalResult?
-    task.receive(on: queue)(onComplete: { result = $0 })
+    task.receive(on: queue)(onCompleted: { result = $0 })
 
     XCTAssertNil(result)
 
