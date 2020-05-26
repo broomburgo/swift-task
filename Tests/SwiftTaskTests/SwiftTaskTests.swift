@@ -432,7 +432,7 @@ final class SwiftTaskTests: XCTestCase {
     XCTAssertEqual(r1, r2)
   }
 
-  func testOnCompletedEquivalencySuccess() {
+  func testOnCompleteEquivalencySuccess() {
     let t1 = LocalTask(completed: .success(42))
 
     var r1: LocalResult?
@@ -471,24 +471,25 @@ final class SwiftTaskTests: XCTestCase {
   }
 
   static var allTests = [
-    ("", testOr)
+    ("testOr", testOr),
+    ("testAllIn", testAllIn),
+    ("testZipWith", testZipWith),
+    ("testFallback", testFallback),
+    ("testMapProgress", testMapProgress),
+    ("testAllInSuccess", testAllInSuccess),
+    ("testFlatMapFailure", testFlatMapFailure),
+    ("testFlatMapSuccess", testFlatMapSuccess),
+    ("testMapEnvironment", testMapEnvironment),
+    ("testZipWithSuccess", testZipWithSuccess),
+    ("testMapFailureWithFailure", testMapFailureWithFailure),
+    ("testMapFailureWithSuccess", testMapFailureWithSuccess),
+    ("testMapSuccessWithFailure", testMapSuccessWithFailure),
+    ("testMapSuccessWithSuccess", testMapSuccessWithSuccess),
+    ("testOnStepEquivalencyFailure", testOnStepEquivalencyFailure),
+    ("testOnStepEquivalencySuccess", testOnStepEquivalencySuccess),
+    ("testOnCompleteEquivalencyFailure", testOnCompleteEquivalencyFailure),
+    ("testOnCompleteEquivalencySuccess", testOnCompleteEquivalencySuccess),
+    ("testCompletedTaskYieldsProperResult", testCompletedTaskYieldsProperResult),
+    ("testCompletedTaskWithEnvYieldsProperResult", testCompletedTaskWithEnvYieldsProperResult)
   ]
 }
-
-//func testReceiveOnBackgroundQueue() {
-//  let queue = DispatchQueue(label: "testQueue")
-//
-//  let task = LocalTask(completed: .success(42))
-//
-//  var result: LocalResult?
-//  task.receive(on: queue)(onComplete: { result = $0 })
-//
-//  XCTAssertNil(result)
-//
-//  let done = expectation(description: "done")
-//  queue.async {
-//    XCTAssertEqual(result, .success(42))
-//    done.fulfill()
-//  }
-//  wait(for: [done], timeout: 1)
-//}
