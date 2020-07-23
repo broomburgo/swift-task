@@ -15,16 +15,22 @@ final class SwiftTaskFoundationTests: XCTestCase {
     let task = LocalTask(completed: .success(42))
 
     var result: LocalResult?
-    task.receive(on: queue)(onCompleted: { result = $0 })
 
-    XCTAssertNil(result)
+    let check = expectation(description: "check")
+    queue.async {
+      XCTAssertNil(result)
+      check.fulfill()
+    }
+
+    task.receive(on: queue)(onCompleted: { result = $0 })
 
     let done = expectation(description: "done")
     queue.async {
       XCTAssertEqual(result, .success(42))
       done.fulfill()
     }
-    wait(for: [done], timeout: 1)
+
+    wait(for: [check, done], timeout: 1)
   }
 
   static var allTests = [

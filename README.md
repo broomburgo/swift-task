@@ -1,3 +1,3 @@
 # swift-task
 
-A description of this package.
+A simple, generic abstraction for asynchrnous computation.
